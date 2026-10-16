@@ -27,3 +27,9 @@ e.grade.forEach((l) => assert.equal(l.filter(Boolean).length, 5));
 
 assert.deepEqual([0, 1, 2, 13, 14].map(limitePorMes), [44, 44, 42, 42, 40]);
 console.log('ok');
+
+// Cargos diferentes com rodízio deslocado não folgam no mesmo dia.
+const abertos6 = [1, 1, 1, 1, 1, 1, 0].map(Boolean);
+const a = gerarEscala(1, abertos6, 40, 0), b = gerarEscala(1, abertos6, 40, 1);
+assert.notEqual(a.grade[0].indexOf(false), b.grade[0].indexOf(false));
+console.log('ok offset');

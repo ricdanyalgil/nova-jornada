@@ -55,7 +55,8 @@ function simular(cargos, limite, encargos) {
 }
 
 // Escala 5x2 rotativa para os dias em que o negócio abre.
-function gerarEscala(nPessoas, abertos, limite) {
+// offset desloca o rodízio, para cargos diferentes não folgarem todos no mesmo dia.
+function gerarEscala(nPessoas, abertos, limite, offset = 0) {
   const dias = abertos.map((a, i) => (a ? i : -1)).filter((i) => i >= 0);
   const D = dias.length;
   const W = Math.min(D, 5);
@@ -64,7 +65,7 @@ function gerarEscala(nPessoas, abertos, limite) {
   for (let p = 0; p < nPessoas; p++) {
     const linha = abertos.map(() => false);
     dias.forEach((d) => (linha[d] = true));
-    for (let j = 0; j < folgasExtras; j++) linha[dias[(p * folgasExtras + j) % D]] = false;
+    for (let j = 0; j < folgasExtras; j++) linha[dias[((p + offset) * folgasExtras + j) % D]] = false;
     grade.push(linha);
   }
   const cobertura = abertos.map((_, d) => grade.filter((l) => l[d]).length);

@@ -282,8 +282,11 @@ input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appear
 .roster th{font-size:.78rem;color:var(--muted);font-weight:600;padding:4px}
 .roster td{text-align:center;border-radius:9px;height:40px;font-size:.8rem;font-weight:600}
 .roster td.name{text-align:left;color:var(--ink);white-space:nowrap;padding-right:8px}
-.roster td.t{background:var(--ok-soft);color:var(--ok)}
-.roster td.t.nova{background:var(--accent-soft);color:var(--accent)}
+.roster td.t{--c:var(--ok);background:color-mix(in srgb,var(--c) 14%,#fff);color:color-mix(in srgb,var(--c) 85%,#000)}
+.roster td.t.nova{background:#fff;box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--c) 70%,#fff);border-style:dashed}
+.roster td.name i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:8px;vertical-align:0}
+.roster tr.grp td{border-top:6px solid transparent}
+.legend .lg-nova{background:#fff;box-shadow:inset 0 0 0 2px var(--gray)}
 .roster td.f{background:var(--amber-soft);color:var(--amber-ink)}
 .roster td.x{background:var(--surface-2);color:var(--gray)}
 .roster tr.cov td{color:var(--ink);font-weight:700;height:34px}
@@ -497,7 +500,7 @@ footer .li svg{width:13px;height:13px}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <!-- Contagem anônima de visitas, sem cookies: https://novajornada.goatcounter.com -->
 <script data-goatcounter="https://novajornada.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
-<script src="calc.js?v=5"></script>
-<script src="app.js?v=5"></script>
+<script src="calc.js?v=6"></script>
+<script src="app.js?v=6"></script>
 </body>
 </html>

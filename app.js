@@ -16,8 +16,10 @@ const EXEMPLO = [
   { cargo: 'Cozinheiro', pessoas: 2, salario: 2600, horas: 44 },
 ];
 const novoCargo = () => ({ cargo: '', pessoas: '', salario: '', horas: 44 });
-const inicial = (vazio) => ({ cargos: vazio ? [novoCargo()] : EXEMPLO.map((c) => ({ ...c })), exemplo: !vazio, dias: [1, 1, 1, 1, 1, 1, 0].map(Boolean), regime: '0.37', encargos: '', fase: 'f2', escala: 0 });
+const inicial = (vazio) => ({ cargos: vazio ? [novoCargo()] : EXEMPLO.map((c) => ({ ...c })), exemplo: !vazio, dias: [1, 1, 1, 1, 1, 1, 0].map(Boolean), regime: '0.37', encargos: '', fase: 'f2', escala: -1 });
 const CHAVE = 'nova-jornada-v2';
+const CORES_CARGO = ['#0071e3', '#34a853', '#9334e6', '#d93025', '#12b5cb', '#e52592', '#3f51b5', '#5f6368']; // sem laranja: é a cor da folga
+const corCargo = (i) => CORES_CARGO[i % CORES_CARGO.length];
 
 let state = inicial();
 try { Object.assign(state, JSON.parse(localStorage.getItem(CHAVE) || '{}')); } catch {}
@@ -203,7 +205,7 @@ $('#out').innerHTML = `
       <p class="sub" id="e-sub"></p>
       <div class="no-print" style="max-width:320px;margin-bottom:16px"><label class="lbl small" for="e-cargo" style="color:var(--muted)">Ver a escala de</label><select id="e-cargo" style="width:100%"></select></div>
       <div class="scroll"><table class="roster" id="e-grade"></table></div>
-      <div class="legend"><span><i style="background:var(--ok-soft)"></i>Trabalha</span><span><i style="background:var(--accent-soft)"></i>Nova contratação</span><span><i style="background:var(--amber-soft)"></i>Folga</span><span><i style="background:var(--surface-2)"></i>Fechado</span></div>
+      <div class="legend" id="e-legenda"></div>
       <div id="e-nota"></div>
     </div>
 
@@ -263,7 +265,7 @@ Chart.defaults.font.size = 12;
 Chart.defaults.color = '#6e6e73';
 const tooltip = { backgroundColor: '#1d1d1f', padding: 10, cornerRadius: 10, displayColors: false, titleFont: { weight: '600' } };
 const reais = (v) => (v >= 1000 ? 'R$ ' + (v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mil' : 'R$ ' + v);
-const CORES = ['#0071e3', '#34a853', '#f29900', '#d93025', '#9334e6', '#12b5cb', '#e8710a', '#5f6368'];
+const CORES = CORES_CARGO;
 
 gCargos = new Chart($('#g-cargos'), {
   type: 'bar',
@@ -369,24 +371,60 @@ function atualizar() {
 }
 
 function renderEscala(cargos, r, fase) {
-  if (state.escala >= cargos.length) state.escala = 0;
-  $('#e-cargo').innerHTML = cargos.map((c, i) => `<option value="${i}" ${i === state.escala ? 'selected' : ''}>${esc(c.cargo || 'Cargo ' + (i + 1))}</option>`).join('');
-  const l = r.linhas[state.escala];
-  const novos = l.estrategia === 'contratar' ? l.contratar : 0;
-  const total = l.pessoas + novos;
-  const e = gerarEscala(total, state.dias, Math.min(l.horas, fase.limite));
-  const mostrar = Math.min(total, 15);
-  const h = nf(e.horasDia) + 'h';
-  $('#e-sub').textContent = e.diasTrabalho
-    ? `Cada pessoa trabalha ${e.diasTrabalho} dias de ${h} e folga ${7 - e.diasTrabalho}. As folgas giram para que nunca falte gente.${novos ? ` Inclui ${plural(novos, 'pessoa nova', 'pessoas novas')}.` : ''}`
-    : 'Marque pelo menos um dia de funcionamento no passo 2 para ver a escala.';
-  $('#e-grade').innerHTML = `<tr><th></th>${DIAS.map((d) => `<th>${d}</th>`).join('')}</tr>` +
-    e.grade.slice(0, mostrar).map((linha, p) => `<tr><td class="name">${p >= l.pessoas ? 'Nova ' + (p - l.pessoas + 1) : 'Pessoa ' + (p + 1)}</td>${linha.map((t, d) =>
-      !state.dias[d] ? '<td class="x">—</td>' : t ? `<td class="t${p >= l.pessoas ? ' nova' : ''}">${h}</td>` : '<td class="f">Folga</td>').join('')}</tr>`).join('') +
-    `<tr class="cov"><td class="name">Trabalhando</td>${e.cobertura.map((n, d) => `<td>${state.dias[d] ? n : ''}</td>`).join('')}</tr>`;
+  if (state.escala >= cargos.length) state.escala = -1;
+  const todos = state.escala < 0;
+  $('#e-cargo').innerHTML = `<option value="-1" ${todos ? 'selected' : ''}>Todos os cargos</option>` +
+    cargos.map((c, i) => `<option value="${i}" ${i === state.escala ? 'selected' : ''}>${esc(c.cargo || 'Cargo ' + (i + 1))}</option>`).join('');
+
+  // Monta a escala de cada cargo, com o rodízio deslocado para espalhar as folgas.
+  let offset = 0;
+  const grupos = r.linhas.map((l, i) => {
+    const novos = l.estrategia === 'contratar' ? l.contratar : 0;
+    const total = l.pessoas + novos;
+    const e = gerarEscala(total, state.dias, Math.min(l.horas, fase.limite), offset);
+    offset += total;
+    return { i, l, novos, total, e, nome: l.cargo || 'Cargo ' + (i + 1), cor: corCargo(i) };
+  }).filter((g) => todos || g.i === state.escala);
+
+  const e0 = grupos[0].e;
+  const pessoas = grupos.reduce((t, g) => t + g.total, 0);
+  const limite = todos ? 40 : 15;
+  if (!e0.diasTrabalho) {
+    $('#e-sub').textContent = 'Marque pelo menos um dia de funcionamento no passo 2 para ver a escala.';
+    $('#e-grade').innerHTML = ''; $('#e-legenda').innerHTML = ''; $('#e-nota').innerHTML = '';
+    return;
+  }
+  const novosTot = grupos.reduce((t, g) => t + g.novos, 0);
+  $('#e-sub').textContent = (todos
+    ? `A equipe inteira: ${plural(pessoas, 'pessoa', 'pessoas')}. Cada cor é um cargo. `
+    : '') + `Cada pessoa trabalha ${e0.diasTrabalho} dias e folga ${7 - e0.diasTrabalho}, e as folgas giram para nunca faltar gente.` +
+    (novosTot ? ` Inclui ${plural(novosTot, 'pessoa nova', 'pessoas novas')}.` : '');
+
+  let linhas = 0;
+  const corpo = grupos.map((g) => g.e.grade.map((linha, p) => {
+    if (linhas++ >= limite) return '';
+    const nova = p >= g.l.pessoas;
+    const h = nf(g.e.horasDia) + 'h';
+    const nome = (todos ? esc(g.nome) + ' ' : 'Pessoa ') + (nova ? `nova ${p - g.l.pessoas + 1}` : p + 1);
+    const cel = linha.map((t, d) => !state.dias[d] ? '<td class="x">—</td>'
+      : t ? `<td class="t${nova ? ' nova' : ''}" style="--c:${g.cor}">${h}</td>` : '<td class="f">Folga</td>').join('');
+    return `<tr${p === 0 && todos ? ' class="grp"' : ''}><td class="name"><i style="background:${g.cor}"></i>${nome}</td>${cel}</tr>`;
+  }).join('')).join('');
+  const cobertura = DIAS.map((_, d) => grupos.reduce((t, g) => t + g.e.cobertura[d], 0));
+  $('#e-grade').innerHTML = `<tr><th></th>${DIAS.map((d) => `<th>${d}</th>`).join('')}</tr>` + corpo +
+    `<tr class="cov"><td class="name">${todos ? 'Total trabalhando' : 'Trabalhando'}</td>${cobertura.map((n, d) => `<td>${state.dias[d] ? n : ''}</td>`).join('')}</tr>`;
+
+  $('#e-legenda').innerHTML = grupos.map((g) => `<span><i style="background:${g.cor}"></i>${esc(g.nome)}</span>`).join('') +
+    (novosTot ? '<span><i class="lg-nova"></i>Nova contratação</span>' : '') +
+    '<span><i style="background:var(--amber-soft)"></i>Folga</span><span><i style="background:var(--surface-2)"></i>Fechado</span>';
+
+  const NOMES = ['segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado', 'domingo'];
+  const buracos = grupos.flatMap((g) => DIAS.map((_, d) => d).filter((d) => state.dias[d] && g.e.cobertura[d] === 0)
+    .map((d) => `${esc(g.nome)} na ${NOMES[d]}`));
   $('#e-nota').innerHTML = [
-    total > mostrar && `<div class="note">Mostrando ${mostrar} de ${total} pessoas. O rodízio segue igual para as demais.</div>`,
-    e.acimaDe8 && '<div class="note">Com poucos dias abertos, cada dia passaria de 8 horas, o máximo da nova regra. Abra mais dias ou reduza as horas.</div>',
+    pessoas > limite && `<div class="note">Mostrando ${limite} de ${pessoas} pessoas. O rodízio segue igual para as demais.</div>`,
+    buracos.length && `<div class="note">Fica sem ninguém do cargo: ${buracos.join(', ')}. Com poucas pessoas num cargo, alguém de outro cargo precisa cobrir esse dia, ou vale contratar.</div>`,
+    grupos.some((g) => g.e.acimaDe8) && '<div class="note">Com poucos dias abertos, cada dia passaria de 8 horas, o máximo da nova regra. Abra mais dias ou reduza as horas.</div>',
   ].filter(Boolean).join('');
 }
 
