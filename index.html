@@ -3,12 +3,27 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Nova Jornada · Simulador do fim da escala 6x1</title>
-<meta name="description" content="Simulador gratuito para pequenos empreendedores: veja o impacto financeiro da redução da jornada de 44h para 40h e do fim da escala 6x1 (PEC 221/2019) na sua empresa.">
-<meta property="og:title" content="Nova Jornada · Quanto o fim da 6x1 custa para o seu negócio?">
-<meta property="og:description" content="Coloque seus cargos, salários e horários. Em segundos você vê o novo custo da folha, quantas pessoas contratar e uma escala 5x2 pronta.">
+<title>Fim da escala 6x1: simulador de custo da jornada de 40 horas | Nova Jornada</title>
+<meta name="description" content="Simulador gratuito do fim da escala 6x1 (PEC 221/2019). Veja quanto sua folha de pagamento sobe com a redução da jornada de 44h para 42h e 40h, se vale contratar ou pagar hora extra e como montar a escala 5x2.">
+<meta name="keywords" content="fim da escala 6x1, escala 6x1, escala 5x2, PEC 221/2019, PEC 6x1, redução da jornada de trabalho, jornada de 40 horas, 40 horas semanais, simulador folha de pagamento, custo hora extra, pequenas empresas, Simples Nacional, CLT">
+<meta name="author" content="Ricardo Danyalgil Júnior">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<link rel="canonical" href="https://jornada.danyalgil.com/">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="pt_BR">
+<meta property="og:site_name" content="Nova Jornada">
+<meta property="og:url" content="https://jornada.danyalgil.com/">
+<meta property="og:title" content="Fim da escala 6x1: quanto isso custa para o seu negócio?">
+<meta property="og:description" content="Coloque seus cargos, salários e horários. Veja o novo custo da folha, quantas pessoas contratar e uma escala 5x2 pronta.">
+<meta property="og:image" content="https://jornada.danyalgil.com/docs/capa.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="860">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Fim da escala 6x1: quanto isso custa para o seu negócio?">
+<meta name="twitter:description" content="Simulador gratuito da nova jornada de 40 horas para pequenos empreendedores.">
+<meta name="twitter:image" content="https://jornada.danyalgil.com/docs/capa.png">
 <meta name="theme-color" content="#0071e3">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 34 34'><rect width='34' height='34' rx='12' fill='%230071e3'/><path d='M6.5 11v12M10.5 11v12M14.5 11v12M18.5 11v12M22.5 11v12' stroke='white' stroke-width='3' stroke-linecap='round'/><circle cx='27' cy='13' r='2' fill='%23ff9f0a'/><circle cx='27' cy='21' r='2' fill='%23ff9f0a'/></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='16' fill='%230071e3'/><text x='32' y='42' font-family='system-ui,sans-serif' font-size='26' font-weight='700' fill='white' text-anchor='middle'>5x2</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
@@ -44,7 +59,8 @@ section{padding:72px 0}
 /* topo */
 header.top{position:sticky;top:0;z-index:20;background:rgba(245,245,247,.8);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);border-bottom:1px solid var(--line)}
 header.top .wrap{display:flex;align-items:center;justify-content:space-between;height:68px}
-.logo{display:flex;align-items:center;gap:10px;font:700 1.25rem var(--display);color:var(--ink);text-decoration:none}
+.logo{display:flex;align-items:center;gap:8px;letter-spacing:-.02em;font:700 1.25rem var(--display);color:var(--ink);text-decoration:none}
+.badge{font:700 .78rem var(--display);color:#fff;background:var(--accent);padding:3px 9px;border-radius:99px;letter-spacing:0}
 nav a{color:var(--muted);text-decoration:none;font-weight:600;font-size:.95rem;margin-left:22px}
 nav a:hover{color:var(--accent)}
 @media (max-width:640px){nav a:not(.btn){display:none}}
@@ -176,12 +192,13 @@ footer .small{color:#86868b;font-size:.85rem}
 @media print{header.top,.hero .cta,.tools,.drop,.del,#add,.no-print{display:none!important}section{padding:24px 0}body{background:#fff}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 </style>
+<script type="application/ld+json">[{"@context": "https://schema.org", "@type": "WebApplication", "name": "Nova Jornada", "url": "https://jornada.danyalgil.com/", "inLanguage": "pt-BR", "applicationCategory": "BusinessApplication", "operatingSystem": "Web", "isAccessibleForFree": true, "offers": {"@type": "Offer", "price": "0", "priceCurrency": "BRL"}, "description": "Simulador do impacto financeiro do fim da escala 6x1 e da redução da jornada para 40 horas semanais (PEC 221/2019).", "author": {"@type": "Person", "name": "Ricardo Danyalgil Júnior"}}, {"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Posso reduzir o salário junto com as horas?", "acceptedAnswer": {"@type": "Answer", "text": "Não. O texto aprovado garante a redução da jornada sem redução salarial. Por isso o valor de cada hora trabalhada sobe."}}, {"@type": "Question", "name": "Como o simulador escolhe entre contratar e pagar hora extra?", "acceptedAnswer": {"@type": "Answer", "text": "Para cada cargo ele calcula as horas que deixam de ser cobertas. Depois compara o custo de contratar mais pessoas com o de pagar essas horas como extra (50% a mais sobre a nova hora). Mostramos o mais barato. Hora extra todo mês, para sempre, pode virar passivo trabalhista. Use-a como ponte, não como plano."}}, {"@type": "Question", "name": "E a escala 12x36?", "acceptedAnswer": {"@type": "Answer", "text": "A 12x36 dá, em média, cerca de 42 horas por semana. A regulamentação de setores específicos ainda vai sair. Por enquanto, informe 42 horas no cargo e acompanhe a convenção coletiva da sua categoria."}}, {"@type": "Question", "name": "Sou MEI ou pequena empresa. Muda alguma coisa?", "acceptedAnswer": {"@type": "Answer", "text": "A PEC prevê regras de transição diferentes para MEI, microempresas e empresas de pequeno porte, a serem definidas em lei complementar. Especialistas apontam que esse alívio deve depender de manter o número de empregos. Antes de demitir, converse com seu contador."}}, {"@type": "Question", "name": "Meus dados vão para algum lugar?", "acceptedAnswer": {"@type": "Answer", "text": "Não. Tudo é calculado no seu navegador. A planilha não sai do seu aparelho e o código é aberto no GitHub."}}, {"@type": "Question", "name": "O resultado é exato?", "acceptedAnswer": {"@type": "Answer", "text": "É uma estimativa para planejar. Não considera adicionais, comissões, convenções coletivas nem reflexos da hora extra em férias e 13º. Para decidir, leve o relatório ao seu contador."}}]}]</script>
 </head>
 <body>
 
 <header class="top">
   <div class="wrap">
-    <a class="logo" href="#"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><rect width="34" height="34" rx="12" fill="#0071e3"/><g stroke-linecap="round" stroke-width="3" stroke="#fff"><path d="M6.5 11v12M10.5 11v12M14.5 11v12M18.5 11v12M22.5 11v12"/></g><circle cx="27" cy="13" r="2" fill="#ff9f0a"/><circle cx="27" cy="21" r="2" fill="#ff9f0a"/></svg>Nova Jornada</a>
+    <a class="logo" href="#" aria-label="Nova Jornada, início">Nova Jornada <span class="badge">5x2</span></a>
     <nav><a href="#lei">O que muda</a><a href="#duvidas">Dúvidas</a><a class="btn btn-primary btn-sm" href="#simulador">Simular grátis</a></nav>
   </div>
 </header>
@@ -190,7 +207,7 @@ footer .small{color:#86868b;font-size:.85rem}
 <section class="hero">
   <div class="wrap">
     <div>
-      <span class="eyebrow">PEC 221/2019, aprovada em outubro de 2026</span>
+      <span class="eyebrow">Fim da escala 6x1 · PEC 221/2019</span>
       <h1>A jornada vai cair para 40 horas. <em>Quanto isso pesa</em> no seu caixa?</h1>
       <p class="lead">A escala 6x1 acabou e a semana vai encolher em duas etapas. Coloque aqui seus funcionários e salários e veja quanto a folha sobe, se vale mais contratar ou pagar hora extra, e como fica a escala.</p>
       <div class="cta">
@@ -293,7 +310,7 @@ footer .small{color:#86868b;font-size:.85rem}
 <footer>
   <div class="wrap">
     <div>
-      <div class="logo" style="color:#fff">Nova Jornada</div>
+      <div class="logo" style="color:#fff">Nova Jornada <span class="badge">5x2</span></div>
       <p>Feito para o dono de padaria, de loja, de oficina e de restaurante que quer saber o que vem pela frente antes de a conta chegar.</p>
       <p class="small">Desenvolvido por</p>
       <p class="by">Ricardo Danyalgil Júnior</p>
