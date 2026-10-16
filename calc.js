@@ -1,23 +1,23 @@
-// Cálculos do simulador. Sem dependências: roda no navegador e no Node (teste).
+// Cálculos do simulador. Script comum (funciona até abrindo o arquivo direto) e também no Node (teste).
 
-export const SEMANAS_MES = 52 / 12;
-export const DIAS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+const SEMANAS_MES = 52 / 12;
+const DIAS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 
 // PEC 221/2019: 44h hoje → 42h após 60 dias → 40h após mais 12 meses.
-export const FASES = [
+const FASES = [
   { id: 'hoje', limite: 44, nome: 'Hoje', quando: 'Até a regra entrar em vigor' },
   { id: 'f1', limite: 42, nome: 'Fase 1', quando: '60 dias após a promulgação' },
   { id: 'f2', limite: 40, nome: 'Fase 2', quando: '12 meses depois da Fase 1' },
 ];
 
-export function limitePorMes(mes) {
+function limitePorMes(mes) {
   if (mes < 2) return 44;
   if (mes < 14) return 42;
   return 40;
 }
 
 // Impacto de um cargo num teto semanal.
-export function impactoCargo(c, limite, encargos) {
+function impactoCargo(c, limite, encargos) {
   const pessoas = Math.max(0, Number(c.pessoas) || 0);
   const salario = Math.max(0, Number(c.salario) || 0);
   const horas = Math.max(0, Number(c.horas) || 0);
@@ -40,7 +40,7 @@ export function impactoCargo(c, limite, encargos) {
     aumentoHora: horas / limite - 1 };
 }
 
-export function simular(cargos, limite, encargos) {
+function simular(cargos, limite, encargos) {
   const linhas = cargos.map((c) => impactoCargo(c, limite, encargos));
   const soma = (k) => linhas.reduce((t, l) => t + l[k], 0);
   const folha = soma('folha');
@@ -55,7 +55,7 @@ export function simular(cargos, limite, encargos) {
 }
 
 // Escala 5x2 rotativa para os dias em que o negócio abre.
-export function gerarEscala(nPessoas, abertos, limite) {
+function gerarEscala(nPessoas, abertos, limite) {
   const dias = abertos.map((a, i) => (a ? i : -1)).filter((i) => i >= 0);
   const D = dias.length;
   const W = Math.min(D, 5);
@@ -72,6 +72,8 @@ export function gerarEscala(nPessoas, abertos, limite) {
   return { grade, cobertura, horasDia, diasTrabalho: W, acimaDe8: horasDia > Math.max(8, limite / 5) + 1e-9 };
 }
 
-export function linhaDoTempo(cargos, encargos, meses = 18) {
+function linhaDoTempo(cargos, encargos, meses = 18) {
   return Array.from({ length: meses }, (_, m) => simular(cargos, limitePorMes(m), encargos).novaFolha);
 }
+
+if (typeof module !== 'undefined') module.exports = { SEMANAS_MES, DIAS, FASES, limitePorMes, impactoCargo, simular, gerarEscala, linhaDoTempo };

@@ -1,5 +1,4 @@
-import { simular, gerarEscala, linhaDoTempo, DIAS, FASES } from './calc.js';
-
+// Depende de calc.js e Chart.js, carregados antes na página.
 const $ = (s) => document.querySelector(s);
 const brl = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 const pct = (v) => (v * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%';
@@ -17,8 +16,8 @@ const EXEMPLO = [
   { cargo: 'Cozinheiro', pessoas: 2, salario: 2600, horas: 44 },
 ];
 const novoCargo = () => ({ cargo: '', pessoas: '', salario: '', horas: 44 });
-const inicial = () => ({ cargos: [novoCargo()], dias: [1, 1, 1, 1, 1, 1, 0].map(Boolean), regime: '0.37', encargos: '', fase: 'f2', escala: 0 });
-const CHAVE = 'nova-jornada';
+const inicial = (vazio) => ({ cargos: vazio ? [novoCargo()] : EXEMPLO.map((c) => ({ ...c })), exemplo: !vazio, dias: [1, 1, 1, 1, 1, 1, 0].map(Boolean), regime: '0.37', encargos: '', fase: 'f2', escala: 0 });
+const CHAVE = 'nova-jornada-v2';
 
 let state = inicial();
 try { Object.assign(state, JSON.parse(localStorage.getItem(CHAVE) || '{}')); } catch {}
@@ -42,6 +41,7 @@ function avisar(texto, desfazer) {
 /* ---------- Passo 1: cargos ---------- */
 const ICON_X = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg>';
 function renderCargos() {
+  $('#aviso-ex').hidden = !state.exemplo;
   $('#roles').innerHTML = state.cargos.map((c, i) => `
     <div class="role" data-i="${i}">
       <div class="f-cargo"><label for="c${i}">Cargo</label><div class="inp"><input id="c${i}" data-k="cargo" value="${esc(c.cargo)}" placeholder="Ex.: Atendente" autocomplete="off"></div></div>
@@ -54,6 +54,7 @@ function renderCargos() {
 $('#roles').addEventListener('input', (e) => {
   const k = e.target.dataset.k; if (!k) return;
   state.cargos[e.target.closest('.role').dataset.i][k] = e.target.value;
+  if (state.exemplo) { state.exemplo = false; $('#aviso-ex').hidden = true; }
   atualizar();
 });
 $('#roles').addEventListener('click', (e) => {
@@ -68,20 +69,21 @@ $('#roles').addEventListener('click', (e) => {
 $('#add').onclick = () => { state.cargos.push(novoCargo()); renderCargos(); $(`#c${state.cargos.length - 1}`).focus(); };
 $('#exemplo').onclick = () => {
   const antes = structuredClone(state.cargos);
-  state.cargos = EXEMPLO.map((c) => ({ ...c })); renderCargos(); atualizar();
+  state.cargos = EXEMPLO.map((c) => ({ ...c })); state.exemplo = true; renderCargos(); atualizar();
   avisar('Preenchemos com um mercadinho de exemplo.', () => { state.cargos = antes; renderCargos(); atualizar(); });
 };
 
 /* ---------- Começar de novo ---------- */
 function recomecar() {
   const antes = structuredClone(state);
-  state = inicial();
+  state = inicial(true);
   try { localStorage.removeItem(CHAVE); } catch {}
   renderTudo();
   $('#simulador').scrollIntoView();
   avisar('Tudo apagado. Pode começar de novo.', () => { state = antes; renderTudo(); });
 }
 $('#limpar').onclick = recomecar;
+$('#limpar-ex').onclick = () => { state.cargos = [novoCargo()]; state.exemplo = false; renderCargos(); atualizar(); $('#c0').focus(); };
 
 /* ---------- Excel ---------- */
 let xlsxPronto;
@@ -108,7 +110,7 @@ async function importar(file) {
       .map((l) => ({ cargo: String(l[ic]).trim(), pessoas: num(l[ip]), salario: num(l[is]), horas: num(l[ih]) || 44 }));
     if (!cargos.length) throw new Error('Não encontramos cargos na planilha. Baixe o modelo para ver como ela deve ficar.');
     const antes = structuredClone(state.cargos);
-    state.cargos = cargos; renderCargos(); atualizar();
+    state.cargos = cargos; state.exemplo = false; renderCargos(); atualizar();
     avisar(`${plural(cargos.length, 'cargo importado', 'cargos importados')} de “${file.name}”.`, () => { state.cargos = antes; renderCargos(); atualizar(); });
   } catch (err) { avisar(err.message); }
   $('#file').value = '';
@@ -160,16 +162,23 @@ $('#out').innerHTML = `
   <div id="cheio" hidden>
     <div class="res-head">
       <div><p class="kicker">Resultado</p><h2>O impacto na sua empresa.</h2></div>
-      <div><div class="seg" role="tablist" aria-label="Fase da transição">${FASES.slice(1).map((f) => `<button role="tab" data-f="${f.id}">${f.nome} · ${f.limite}h</button>`).join('')}</div><p class="seg-help" id="seg-help"></p></div>
+      <div><div class="seg" role="tablist" aria-label="Fase da transição">${FASES.slice(1).map((f) => `<button role="tab" data-f="${f.id}">${f.nome} · ${f.limite}h</button>`).join('')}</div></div>
     </div>
 
     <div class="hero-res" id="hero-res">
-      <div>
+      <div class="glow" aria-hidden="true"></div>
+      <div class="hr-main">
+        <span class="hr-chip" id="h-chip"></span>
         <p class="l" id="h-l"></p>
-        <p class="v" id="h-v"></p>
+        <p class="v"><span id="h-v"></span><small id="h-v-s">por mês</small></p>
+        <div class="hr-pills" id="h-pills"><span class="hp" id="h-pct"></span><span class="hp" id="h-ano"></span></div>
         <p class="say" id="h-say"></p>
       </div>
-      <div class="bar2" id="h-bars" aria-label="Folha mensal em cada fase"></div>
+      <div class="hr-side">
+        <p class="hr-t">Folha mensal com encargos</p>
+        <div class="steps3" id="h-bars">${FASES.map((f, i) => `<div class="st" data-f="${f.id}"><div class="st-top"><span class="st-n">${f.nome} <em>${f.limite}h</em></span><span class="st-v"><b data-i="${i}"></b><small></small></span></div><div class="tr"><div class="fl"></div></div></div>`).join('')}</div>
+        <p class="hr-foot" id="h-foot"></p>
+      </div>
     </div>
 
     <div class="kpis">
@@ -216,7 +225,39 @@ $('#limpar2').onclick = recomecar;
 document.querySelectorAll('.seg button').forEach((t) => (t.onclick = () => { state.fase = t.dataset.f; atualizar(); }));
 $('#e-cargo').onchange = (e) => { state.escala = Number(e.target.value); atualizar(); };
 
+/* ---------- Animação ---------- */
+const calmo = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let heroVisto = false;
+function contar(el, alvo, fmt) {
+  const de = heroVisto ? Number(el.dataset.v || 0) : alvo;
+  el.dataset.v = alvo;
+  cancelAnimationFrame(el._raf);
+  if (calmo || de === alvo) { el.textContent = fmt(alvo); return; }
+  const t0 = performance.now(), dur = 900;
+  const passo = (t) => {
+    const p = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - p, 3);
+    el.textContent = fmt(Math.round(de + (alvo - de) * e));
+    if (p < 1) el._raf = requestAnimationFrame(passo);
+  };
+  el._raf = requestAnimationFrame(passo);
+}
+new IntersectionObserver((es, obs) => {
+  if (!es[0].isIntersecting) return;
+  obs.disconnect();
+  heroVisto = true;
+  $('#hero-res').classList.add('in');
+  document.querySelectorAll('#hero-res [data-v]').forEach((el) => {
+    const alvo = Number(el.dataset.v); el.dataset.v = 0;
+    contar(el, alvo, el.id === 'h-v' ? (v) => (alvo ? '+' + brl(v) : 'R$ 0') : brl);
+  });
+}, { threshold: 0.35 }).observe($('#hero-res'));
+
 /* ---------- Gráficos ---------- */
+const temGrafico = typeof Chart !== 'undefined';
+let gCargos, gTempo;
+if (temGrafico) {
+Chart.defaults.animation.duration = 900;
+Chart.defaults.animation.easing = 'easeOutQuart';
 Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif";
 Chart.defaults.font.size = 12;
 Chart.defaults.color = '#6e6e73';
@@ -224,7 +265,7 @@ const tooltip = { backgroundColor: '#1d1d1f', padding: 10, cornerRadius: 10, dis
 const reais = (v) => (v >= 1000 ? 'R$ ' + (v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mil' : 'R$ ' + v);
 const CORES = ['#0071e3', '#34a853', '#f29900', '#d93025', '#9334e6', '#12b5cb', '#e8710a', '#5f6368'];
 
-const gCargos = new Chart($('#g-cargos'), {
+gCargos = new Chart($('#g-cargos'), {
   type: 'bar',
   data: { labels: [], datasets: [{ data: [], backgroundColor: CORES, borderRadius: 8, borderSkipped: false, barThickness: 22 }] },
   options: {
@@ -234,7 +275,7 @@ const gCargos = new Chart($('#g-cargos'), {
   },
 });
 const meses = Array.from({ length: 18 }, (_, m) => { const d = new Date(2026, 9 + m, 1); return d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '') + '/' + String(d.getFullYear()).slice(2); });
-const gTempo = new Chart($('#g-tempo'), {
+gTempo = new Chart($('#g-tempo'), {
   type: 'line',
   data: { labels: meses, datasets: [{ data: [], stepped: true, borderColor: '#0071e3', borderWidth: 2.5, pointRadius: 0, pointHoverRadius: 5, pointHoverBackgroundColor: '#0071e3', fill: true,
     backgroundColor: (ctx) => { const { chart } = ctx; if (!chart.chartArea) return 'rgba(0,113,227,.08)'; const g = chart.ctx.createLinearGradient(0, chart.chartArea.top, 0, chart.chartArea.bottom); g.addColorStop(0, 'rgba(0,113,227,.18)'); g.addColorStop(1, 'rgba(0,113,227,0)'); return g; } }] },
@@ -244,6 +285,8 @@ const gTempo = new Chart($('#g-tempo'), {
     scales: { y: { ticks: { callback: reais }, grid: { color: '#f0f0f3' }, border: { display: false } }, x: { grid: { display: false }, border: { display: false }, ticks: { maxRotation: 0, autoSkipPadding: 14 } } },
   },
 });
+
+}
 
 /* ---------- Atualização ---------- */
 let ultimo = null;
@@ -267,7 +310,6 @@ function atualizar() {
   ultimo = r;
   const porFase = FASES.map((f) => simular(cargos, f.limite, enc).novaFolha);
   document.querySelectorAll('.seg button').forEach((t) => t.setAttribute('aria-selected', t.dataset.f === fase.id));
-  $('#seg-help').textContent = `${fase.nome}: limite de ${fase.limite}h por semana, ${QUANDO[fase.id]}.`;
 
   // Destaque principal
   const sem = r.extra === 0;
@@ -276,16 +318,24 @@ function atualizar() {
   const extra = afetados.filter((l) => l.estrategia === 'horaExtra');
   const nomes = (ls) => ls.map((l) => esc(l.cargo || 'sem nome')).join(', ');
   $('#hero-res').classList.toggle('ok', sem);
-  $('#h-l').textContent = sem ? `Na ${fase.nome.toLowerCase()}` : `Na ${fase.nome.toLowerCase()}, sua folha sobe`;
-  $('#h-v').innerHTML = sem ? 'Nada muda' : `+${brl(r.extra)}<small> /mês</small>`;
+  $('#h-chip').textContent = `${fase.nome} · ${fase.limite}h por semana · ${QUANDO[fase.id]}`;
+  $('#h-l').textContent = sem ? 'Nada muda na sua folha' : 'Sua folha vai subir';
+  contar($('#h-v'), sem ? 0 : r.extra, (v) => (sem ? 'R$ 0' : '+' + brl(v)));
+  $('#h-pills').hidden = sem;
+  $('#h-pct').textContent = `+${pct(r.percentual)} na folha`;
+  $('#h-ano').textContent = `${brl(r.extra * 13)} por ano`;
   $('#h-say').innerHTML = sem
     ? 'Sua equipe já trabalha dentro do novo limite de horas. Não há custo extra nesta fase.'
-    : `Um aumento de <b>${pct(r.percentual)}</b>: de ${brl(r.folha)} para <b>${brl(r.novaFolha)}</b> por mês. ` +
+    : `A folha passa de ${brl(r.folha)} para <b>${brl(r.novaFolha)}</b> por mês. ` +
       [contratar.length && `Para ${nomes(contratar)}, o mais barato é <b>contratar</b>.`, extra.length && `Para ${nomes(extra)}, sai mais em conta pagar <b>hora extra</b>.`].filter(Boolean).join(' ');
   const max = Math.max(...porFase);
-  const coresFase = ['#8e8e93', '#f29900', '#ff6b5e'];
-  $('#h-bars').innerHTML = FASES.map((f, i) => `<div class="row"><span>${f.limite}h</span><div class="tr"><div class="fl" style="width:${(porFase[i] / max) * 100}%;background:${coresFase[i]}"></div></div><span>${brl(porFase[i])}</span></div>`).join('') +
-    '<p class="small" style="color:#a1a1a6;margin-top:4px">Folha mensal com encargos em cada etapa.</p>';
+  document.querySelectorAll('#h-bars .st').forEach((el, i) => {
+    el.classList.toggle('cur', el.dataset.f === fase.id || (i === 0 && sem && fase.id === 'hoje'));
+    el.style.setProperty('--w', ((porFase[i] / max) * 100).toFixed(1) + '%');
+    contar(el.querySelector('b'), porFase[i], brl);
+    el.querySelector('small').textContent = i && porFase[i] > porFase[0] ? '+' + brl(porFase[i] - porFase[0]) : '';
+  });
+  $('#h-foot').textContent = sem ? '' : `Da jornada de hoje até as 40h, a diferença é de ${brl(porFase[2] - porFase[0])} por mês.`;
 
   $('#k-ano').textContent = brl(r.extra * 13);
   $('#k-contr').textContent = r.contratar;
@@ -294,11 +344,13 @@ function atualizar() {
   $('#k-hora').textContent = maior ? '+' + pct(maior) : '0%';
   $('#k-hora-s').textContent = `O salário fica igual e as horas diminuem. ${afetados.length ? `Afeta ${plural(r.afetados, 'funcionário', 'funcionários')} de ${totalPessoas}.` : ''}`;
 
+  if (temGrafico) {
   gCargos.data.labels = r.linhas.map((l) => l.cargo || 'Sem nome');
   gCargos.data.datasets[0].data = r.linhas.map((l) => Math.round(l.custoExtra));
   gCargos.update();
   gTempo.data.datasets[0].data = linhaDoTempo(cargos, enc).map(Math.round);
   gTempo.update();
+  }
 
   $('#t-cargos').innerHTML = r.linhas.map((l) => {
     const sug = l.estrategia === 'contratar' ? `<span class="tag c">Contratar ${l.contratar}</span>`
@@ -360,6 +412,16 @@ function atualizarDock() {
   $('#dock').classList.toggle('on', on);
   $('#dock').setAttribute('aria-hidden', !on);
   if (ultimo) $('#dock-v').textContent = ultimo.extra ? `+${brl(ultimo.extra)}/mês` : 'nenhum';
+}
+
+/* ---------- Entrada suave ao rolar ---------- */
+if (!calmo && 'IntersectionObserver' in window) {
+  const revelar = new IntersectionObserver((es) => es.forEach((e) => {
+    if (e.isIntersecting) { e.target.classList.add('vis'); revelar.unobserve(e.target); }
+  }), { threshold: 0.12 });
+  document.querySelectorAll('.weeks, .stage, .stat, .sheet, .kpi, .card, .faq details').forEach((el, i) => {
+    el.classList.add('reveal'); el.style.setProperty('--d', (i % 4) * 70 + 'ms'); revelar.observe(el);
+  });
 }
 
 function renderTudo() { renderCargos(); renderPasso2(); atualizar(); }

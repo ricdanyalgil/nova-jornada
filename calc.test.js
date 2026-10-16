@@ -1,6 +1,6 @@
-// node calc.test.mjs
-import assert from 'node:assert/strict';
-import { impactoCargo, simular, gerarEscala, limitePorMes } from './calc.js';
+// node calc.test.js
+const assert = require('node:assert/strict');
+const { impactoCargo, simular, gerarEscala, limitePorMes } = require('./calc.js');
 
 // 10 pessoas a 44h, R$ 2.000, sem encargos, teto 40h → faltam 40h/semana = 1 contratação.
 const r = impactoCargo({ cargo: 'Caixa', pessoas: 10, salario: 2000, horas: 44 }, 40, 0);

@@ -77,7 +77,7 @@ Depois abra `http://localhost:4173`.
 Para conferir os cálculos:
 
 ```bash
-node calc.test.mjs
+node calc.test.js
 ```
 
 ## Fontes
