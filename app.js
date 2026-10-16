@@ -3,7 +3,12 @@ import { simular, gerarEscala, linhaDoTempo, DIAS, FASES } from './calc.js';
 const $ = (s) => document.querySelector(s);
 const brl = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 const pct = (v) => (v * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%';
+const nf = (v) => v.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
+
+// Prazos contados a partir da promulgação prevista (16/10/2026).
+const QUANDO = { f1: 'a partir de dez/2026', f2: 'a partir de dez/2027' };
 
 const EXEMPLO = [
   { cargo: 'Atendente', pessoas: 6, salario: 1900, horas: 44 },
@@ -12,23 +17,38 @@ const EXEMPLO = [
   { cargo: 'Cozinheiro', pessoas: 2, salario: 2600, horas: 44 },
 ];
 const novoCargo = () => ({ cargo: '', pessoas: '', salario: '', horas: 44 });
+const inicial = () => ({ cargos: [novoCargo()], dias: [1, 1, 1, 1, 1, 1, 0].map(Boolean), regime: '0.37', encargos: '', fase: 'f2', escala: 0 });
+const CHAVE = 'nova-jornada';
 
-let state = { cargos: [novoCargo()], dias: [1, 1, 1, 1, 1, 1, 0].map(Boolean), regime: '0.37', encargos: '', fase: 'f2', escala: 0 };
-try { Object.assign(state, JSON.parse(localStorage.getItem('nova-jornada') || '{}')); } catch {}
+let state = inicial();
+try { Object.assign(state, JSON.parse(localStorage.getItem(CHAVE) || '{}')); } catch {}
 if (new URLSearchParams(location.search).has('exemplo')) state.cargos = EXEMPLO.map((c) => ({ ...c }));
-const salvar = () => { try { localStorage.setItem('nova-jornada', JSON.stringify(state)); } catch {} };
+const salvar = () => { try { localStorage.setItem(CHAVE, JSON.stringify(state)); } catch {} };
 const encargos = () => (state.regime === 'custom' ? (Number(state.encargos) || 0) / 100 : Number(state.regime));
 const validos = () => state.cargos.filter((c) => Number(c.pessoas) > 0 && Number(c.salario) > 0 && Number(c.horas) > 0);
 
+/* ---------- Aviso (snackbar) ---------- */
+let snackTimer;
+function avisar(texto, desfazer) {
+  $('#snack-t').textContent = texto;
+  const b = $('#snack-b');
+  b.hidden = !desfazer;
+  b.onclick = () => { desfazer(); $('#snack').classList.remove('on'); };
+  $('#snack').classList.add('on');
+  clearTimeout(snackTimer);
+  snackTimer = setTimeout(() => $('#snack').classList.remove('on'), desfazer ? 7000 : 4000);
+}
+
 /* ---------- Passo 1: cargos ---------- */
+const ICON_X = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg>';
 function renderCargos() {
   $('#roles').innerHTML = state.cargos.map((c, i) => `
     <div class="role" data-i="${i}">
-      <div class="f-cargo"><label for="c${i}">Cargo</label><input id="c${i}" data-k="cargo" value="${esc(c.cargo)}" placeholder="Ex.: Atendente"></div>
-      <div><label for="p${i}">Funcionários</label><input id="p${i}" data-k="pessoas" type="number" inputmode="numeric" min="0" value="${esc(c.pessoas)}" placeholder="0"></div>
-      <div><label for="s${i}">Salário (R$)</label><input id="s${i}" data-k="salario" type="number" inputmode="decimal" min="0" step="50" value="${esc(c.salario)}" placeholder="2.000"></div>
-      <div><label for="h${i}">Horas/semana</label><input id="h${i}" data-k="horas" type="number" inputmode="numeric" min="1" max="60" value="${esc(c.horas)}"></div>
-      <button class="del" type="button" aria-label="Remover cargo" data-del="${i}">×</button>
+      <div class="f-cargo"><label for="c${i}">Cargo</label><div class="inp"><input id="c${i}" data-k="cargo" value="${esc(c.cargo)}" placeholder="Ex.: Atendente" autocomplete="off"></div></div>
+      <div><label for="p${i}">Funcionários</label><div class="inp"><input id="p${i}" data-k="pessoas" type="number" inputmode="numeric" min="0" value="${esc(c.pessoas)}" placeholder="0"></div></div>
+      <div><label for="s${i}">Salário de cada um</label><div class="inp has-pre"><span class="pre">R$</span><input id="s${i}" data-k="salario" type="number" inputmode="decimal" min="0" step="50" value="${esc(c.salario)}" placeholder="2000"></div></div>
+      <div><label for="h${i}">Horas por semana</label><div class="inp has-suf"><input id="h${i}" data-k="horas" type="number" inputmode="numeric" min="1" max="60" value="${esc(c.horas)}"><span class="suf">h</span></div></div>
+      <button class="del" type="button" aria-label="Remover ${esc(c.cargo || 'cargo')}" data-del="${i}">${ICON_X}</button>
     </div>`).join('');
 }
 $('#roles').addEventListener('input', (e) => {
@@ -37,21 +57,39 @@ $('#roles').addEventListener('input', (e) => {
   atualizar();
 });
 $('#roles').addEventListener('click', (e) => {
-  const i = e.target.dataset.del; if (i == null) return;
-  state.cargos.splice(i, 1);
+  const btn = e.target.closest('[data-del]'); if (!btn) return;
+  const i = Number(btn.dataset.del);
+  const antes = structuredClone(state.cargos);
+  const [removido] = state.cargos.splice(i, 1);
   if (!state.cargos.length) state.cargos.push(novoCargo());
   renderCargos(); atualizar();
+  if (removido.cargo || removido.pessoas) avisar(`${removido.cargo || 'Cargo'} removido.`, () => { state.cargos = antes; renderCargos(); atualizar(); });
 });
 $('#add').onclick = () => { state.cargos.push(novoCargo()); renderCargos(); $(`#c${state.cargos.length - 1}`).focus(); };
-$('#exemplo').onclick = () => { state.cargos = EXEMPLO.map((c) => ({ ...c })); renderCargos(); atualizar(); $('#resultado').scrollIntoView(); };
-$('#limpar').onclick = () => { state.cargos = [novoCargo()]; renderCargos(); atualizar(); };
+$('#exemplo').onclick = () => {
+  const antes = structuredClone(state.cargos);
+  state.cargos = EXEMPLO.map((c) => ({ ...c })); renderCargos(); atualizar();
+  avisar('Preenchemos com um mercadinho de exemplo.', () => { state.cargos = antes; renderCargos(); atualizar(); });
+};
+
+/* ---------- Começar de novo ---------- */
+function recomecar() {
+  const antes = structuredClone(state);
+  state = inicial();
+  try { localStorage.removeItem(CHAVE); } catch {}
+  renderTudo();
+  $('#simulador').scrollIntoView();
+  avisar('Tudo apagado. Pode começar de novo.', () => { state = antes; renderTudo(); });
+}
+$('#limpar').onclick = recomecar;
 
 /* ---------- Excel ---------- */
 let xlsxPronto;
 const carregarXLSX = () => (xlsxPronto ??= new Promise((ok, erro) => {
   const s = document.createElement('script');
   s.src = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
-  s.onload = () => ok(window.XLSX); s.onerror = () => erro(new Error('Não foi possível carregar o leitor de planilhas.'));
+  s.onload = () => ok(window.XLSX);
+  s.onerror = () => { xlsxPronto = null; erro(new Error('Não conseguimos abrir o leitor de planilhas. Verifique a internet e tente de novo.')); };
   document.head.appendChild(s);
 }));
 const norm = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -68,9 +106,12 @@ async function importar(file) {
       is = col(/sal|remun/, 2), ih = col(/hora|jornada|carga/, 3);
     const cargos = linhas.slice(1).filter((l) => l[ic] !== '' || l[ip] !== '')
       .map((l) => ({ cargo: String(l[ic]).trim(), pessoas: num(l[ip]), salario: num(l[is]), horas: num(l[ih]) || 44 }));
-    if (!cargos.length) throw new Error('Não encontramos cargos na planilha. Use o modelo para conferir as colunas.');
-    state.cargos = cargos; renderCargos(); atualizar(); $('#resultado').scrollIntoView();
-  } catch (err) { alert(err.message); }
+    if (!cargos.length) throw new Error('Não encontramos cargos na planilha. Baixe o modelo para ver como ela deve ficar.');
+    const antes = structuredClone(state.cargos);
+    state.cargos = cargos; renderCargos(); atualizar();
+    avisar(`${plural(cargos.length, 'cargo importado', 'cargos importados')} de “${file.name}”.`, () => { state.cargos = antes; renderCargos(); atualizar(); });
+  } catch (err) { avisar(err.message); }
+  $('#file').value = '';
 }
 $('#file').onchange = (e) => e.target.files[0] && importar(e.target.files[0]);
 const drop = $('#drop');
@@ -84,109 +125,198 @@ $('#modelo').onclick = async () => {
     ws['!cols'] = [{ wch: 22 }, { wch: 14 }, { wch: 12 }, { wch: 18 }];
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Equipe');
     XLSX.writeFile(wb, 'modelo-nova-jornada.xlsx');
-  } catch (err) { alert(err.message); }
+    avisar('Modelo baixado. Troque os exemplos pelos seus dados e envie de volta.');
+  } catch (err) { avisar(err.message); }
 };
 
 /* ---------- Passo 2 ---------- */
-$('#dias').innerHTML = DIAS.map((d, i) => `<button type="button" class="chip" data-d="${i}" aria-pressed="${state.dias[i]}">${d}</button>`).join('');
+const NOMES_DIA = ['segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado', 'domingo'];
+function renderPasso2() {
+  $('#dias').innerHTML = DIAS.map((d, i) => `<button type="button" class="chip" data-d="${i}" aria-pressed="${state.dias[i]}" aria-label="${NOMES_DIA[i]}">${d}</button>`).join('');
+  document.querySelectorAll('[name=regime]').forEach((r) => (r.checked = r.value === state.regime));
+  $('#encargos').value = state.encargos;
+  $('#encargos-wrap').hidden = state.regime !== 'custom';
+}
 $('#dias').onclick = (e) => {
-  const d = e.target.dataset.d; if (d == null) return;
+  const d = e.target.closest('[data-d]')?.dataset.d; if (d == null) return;
   state.dias[d] = !state.dias[d]; e.target.setAttribute('aria-pressed', state.dias[d]); atualizar();
 };
-$('#regime').value = state.regime;
-$('#encargos').value = state.encargos;
-$('#encargos').hidden = state.regime !== 'custom';
-$('#regime').onchange = (e) => { state.regime = e.target.value; $('#encargos').hidden = state.regime !== 'custom'; atualizar(); };
+$('#regime').onchange = (e) => {
+  state.regime = e.target.value;
+  $('#encargos-wrap').hidden = state.regime !== 'custom';
+  if (state.regime === 'custom') $('#encargos').focus();
+  atualizar();
+};
 $('#encargos').oninput = (e) => { state.encargos = e.target.value; atualizar(); };
 
 /* ---------- Resultado ---------- */
 $('#out').innerHTML = `
-  <div id="vazio" class="card empty"><p style="font-size:1.2rem;margin:0 0 16px">Preencha pelo menos um cargo, com quantas pessoas, salário e horas, para ver a conta.</p><button class="btn btn-primary" type="button" onclick="document.querySelector('#exemplo').click()">Usar um exemplo</button></div>
+  <div id="vazio" class="card empty">
+    <div class="ill"><svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 22V12M11 22V6M17 22v-8M23 22V9"/></svg></div>
+    <h3>Seu resultado aparece aqui</h3>
+    <p>Preencha pelo menos um cargo com número de funcionários, salário e horas por semana. Quer só ver como funciona?</p>
+    <button class="btn btn-primary" type="button" id="vazio-ex">Ver com um exemplo</button>
+  </div>
   <div id="cheio" hidden>
-    <h2>O resultado</h2>
-    <div class="tabs" role="tablist">${FASES.slice(1).map((f) => `<button class="tab" role="tab" data-f="${f.id}">${f.nome} · ${f.limite}h</button>`).join('')}</div>
+    <div class="res-head">
+      <div><p class="kicker">Resultado</p><h2>O impacto na sua empresa.</h2></div>
+      <div><div class="seg" role="tablist" aria-label="Fase da transição">${FASES.slice(1).map((f) => `<button role="tab" data-f="${f.id}">${f.nome} · ${f.limite}h</button>`).join('')}</div><p class="seg-help" id="seg-help"></p></div>
+    </div>
+
+    <div class="hero-res" id="hero-res">
+      <div>
+        <p class="l" id="h-l"></p>
+        <p class="v" id="h-v"></p>
+        <p class="say" id="h-say"></p>
+      </div>
+      <div class="bar2" id="h-bars" aria-label="Folha mensal em cada fase"></div>
+    </div>
+
     <div class="kpis">
-      <div class="kpi big" id="k-main"><div class="l">Sua folha vai aumentar, por mês</div><div class="v" id="k-mes"></div><div class="s" id="k-mes-s"></div></div>
-      <div class="kpi"><div class="l">Por ano</div><div class="v" id="k-ano"></div><div class="s">com 13º salário</div></div>
-      <div class="kpi"><div class="l">Contratações</div><div class="v" id="k-contr"></div><div class="s" id="k-contr-s"></div></div>
-      <div class="kpi"><div class="l">Custo da hora</div><div class="v" id="k-hora"></div><div class="s" id="k-hora-s"></div></div>
+      <div class="kpi"><p class="l">Custo extra no ano</p><p class="v" id="k-ano"></p><p class="s">12 salários + 13º, já com encargos.</p></div>
+      <div class="kpi"><p class="l">Pessoas para contratar</p><p class="v" id="k-contr"></p><p class="s" id="k-contr-s"></p></div>
+      <div class="kpi"><p class="l">Cada hora fica mais cara</p><p class="v" id="k-hora"></p><p class="s" id="k-hora-s"></p></div>
     </div>
+
     <div class="charts">
-      <div class="card"><h4>Folha mensal em cada fase</h4><p class="sub">Salários + encargos</p><div class="chart-box"><canvas id="g-fases"></canvas></div></div>
-      <div class="card"><h4>Os próximos 18 meses</h4><p class="sub">Custo mensal a partir da promulgação</p><div class="chart-box"><canvas id="g-tempo"></canvas></div></div>
+      <div class="card"><h4>De onde vem o aumento</h4><p class="sub">Custo extra por mês, por cargo.</p><div class="chart-box"><canvas id="g-cargos" aria-label="Gráfico do aumento por cargo"></canvas></div></div>
+      <div class="card"><h4>Mês a mês</h4><p class="sub">Quanto a folha vai custar nos próximos 18 meses.</p><div class="chart-box"><canvas id="g-tempo" aria-label="Gráfico da folha nos próximos 18 meses"></canvas></div></div>
     </div>
-    <div class="card" style="margin-top:16px"><h4>O que fazer em cada cargo</h4><p class="sub">As horas que sobram podem virar hora extra ou uma contratação. Aqui está o que sai mais em conta.</p>
-      <div class="scroll"><table class="table"><thead><tr><th>Cargo</th><th>Horas que faltam/semana</th><th>Contratar</th><th>Hora extra</th><th>Recomendação</th></tr></thead><tbody id="t-cargos"></tbody></table></div>
+
+    <div class="card">
+      <h4>O que fazer em cada cargo</h4>
+      <p class="sub">Com menos horas por pessoa, sobram horas descobertas. Elas podem virar hora extra ou uma nova contratação. Em verde, a opção mais barata.</p>
+      <table class="table"><thead><tr><th>Cargo</th><th>Horas descobertas</th><th>Se contratar</th><th>Se pagar hora extra</th><th>Sugestão</th></tr></thead><tbody id="t-cargos"></tbody></table>
     </div>
-    <div class="card" style="margin-top:16px"><h4>Sua nova escala</h4><p class="sub" id="e-sub"></p>
-      <div class="field no-print" style="max-width:360px;margin-bottom:16px"><label for="e-cargo">Cargo</label><select id="e-cargo"></select></div>
+
+    <div class="card">
+      <h4>Sua nova escala</h4>
+      <p class="sub" id="e-sub"></p>
+      <div class="no-print" style="max-width:320px;margin-bottom:16px"><label class="lbl small" for="e-cargo" style="color:var(--muted)">Ver a escala de</label><select id="e-cargo" style="width:100%"></select></div>
       <div class="scroll"><table class="roster" id="e-grade"></table></div>
-      <div class="legend"><span><i style="background:var(--ok-soft)"></i>Trabalha</span><span><i style="background:#d1fae5;outline:2px dashed var(--accent-2)"></i>Nova contratação</span><span><i style="background:var(--amber-soft)"></i>Folga</span><span><i style="background:var(--surface-2)"></i>Fechado</span></div>
+      <div class="legend"><span><i style="background:var(--ok-soft)"></i>Trabalha</span><span><i style="background:var(--accent-soft)"></i>Nova contratação</span><span><i style="background:var(--amber-soft)"></i>Folga</span><span><i style="background:var(--surface-2)"></i>Fechado</span></div>
       <div id="e-nota"></div>
     </div>
-    <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:24px" class="no-print">
-      <button class="btn btn-primary" type="button" onclick="print()">Imprimir ou salvar em PDF</button>
-      <a class="btn btn-ghost" href="#simulador">Ajustar dados</a>
+
+    <details class="card how">
+      <summary>Como chegamos nesse número</summary>
+      <ol id="how"></ol>
+    </details>
+
+    <div class="actions no-print">
+      <button class="btn btn-primary" type="button" id="imprimir">Salvar em PDF ou imprimir</button>
+      <a class="btn btn-outline" href="#simulador">Ajustar os dados</a>
+      <button class="btn btn-danger" type="button" id="limpar2">Começar de novo</button>
     </div>
   </div>`;
 
-document.querySelectorAll('.tab').forEach((t) => (t.onclick = () => { state.fase = t.dataset.f; atualizar(); }));
+$('#vazio-ex').onclick = () => $('#exemplo').click();
+$('#imprimir').onclick = () => print();
+$('#limpar2').onclick = recomecar;
+document.querySelectorAll('.seg button').forEach((t) => (t.onclick = () => { state.fase = t.dataset.f; atualizar(); }));
 $('#e-cargo').onchange = (e) => { state.escala = Number(e.target.value); atualizar(); };
 
+/* ---------- Gráficos ---------- */
 Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif";
-Chart.defaults.font.size = 13;
+Chart.defaults.font.size = 12;
 Chart.defaults.color = '#6e6e73';
-const eixoBRL = { ticks: { callback: (v) => 'R$ ' + (v >= 1000 ? (v / 1000).toLocaleString('pt-BR') + ' mil' : v) }, grid: { color: '#ebebf0' }, border: { display: false } };
-const tip = { callbacks: { label: (c) => ' ' + brl(c.parsed.y) } };
-const gFases = new Chart($('#g-fases'), {
+const tooltip = { backgroundColor: '#1d1d1f', padding: 10, cornerRadius: 10, displayColors: false, titleFont: { weight: '600' } };
+const reais = (v) => (v >= 1000 ? 'R$ ' + (v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mil' : 'R$ ' + v);
+const CORES = ['#0071e3', '#34a853', '#f29900', '#d93025', '#9334e6', '#12b5cb', '#e8710a', '#5f6368'];
+
+const gCargos = new Chart($('#g-cargos'), {
   type: 'bar',
-  data: { labels: FASES.map((f) => `${f.nome} · ${f.limite}h`), datasets: [{ data: [], backgroundColor: ['#c7c7cc', '#ff9f0a', '#ff3b30'], borderRadius: 10, maxBarThickness: 64 }] },
-  options: { maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: tip }, scales: { y: { ...eixoBRL, beginAtZero: true }, x: { grid: { display: false }, border: { display: false } } } },
+  data: { labels: [], datasets: [{ data: [], backgroundColor: CORES, borderRadius: 8, borderSkipped: false, barThickness: 22 }] },
+  options: {
+    indexAxis: 'y', maintainAspectRatio: false,
+    plugins: { legend: { display: false }, tooltip: { ...tooltip, callbacks: { label: (c) => ' ' + brl(c.parsed.x) + ' por mês' } } },
+    scales: { x: { ticks: { callback: reais }, grid: { color: '#f0f0f3' }, border: { display: false } }, y: { grid: { display: false }, border: { display: false }, ticks: { color: '#1d1d1f', font: { weight: '600' } } } },
+  },
 });
 const meses = Array.from({ length: 18 }, (_, m) => { const d = new Date(2026, 9 + m, 1); return d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '') + '/' + String(d.getFullYear()).slice(2); });
 const gTempo = new Chart($('#g-tempo'), {
   type: 'line',
-  data: { labels: meses, datasets: [{ data: [], stepped: true, borderColor: '#0071e3', borderWidth: 3, pointRadius: 0, fill: true, backgroundColor: 'rgba(0,113,227,.08)' }] },
-  options: { maintainAspectRatio: false, interaction: { intersect: false, mode: 'index' }, plugins: { legend: { display: false }, tooltip: tip }, scales: { y: eixoBRL, x: { grid: { display: false }, border: { display: false }, ticks: { maxRotation: 0, autoSkipPadding: 12 } } } },
+  data: { labels: meses, datasets: [{ data: [], stepped: true, borderColor: '#0071e3', borderWidth: 2.5, pointRadius: 0, pointHoverRadius: 5, pointHoverBackgroundColor: '#0071e3', fill: true,
+    backgroundColor: (ctx) => { const { chart } = ctx; if (!chart.chartArea) return 'rgba(0,113,227,.08)'; const g = chart.ctx.createLinearGradient(0, chart.chartArea.top, 0, chart.chartArea.bottom); g.addColorStop(0, 'rgba(0,113,227,.18)'); g.addColorStop(1, 'rgba(0,113,227,0)'); return g; } }] },
+  options: {
+    maintainAspectRatio: false, interaction: { intersect: false, mode: 'index' },
+    plugins: { legend: { display: false }, tooltip: { ...tooltip, callbacks: { label: (c) => ' Folha: ' + brl(c.parsed.y) } } },
+    scales: { y: { ticks: { callback: reais }, grid: { color: '#f0f0f3' }, border: { display: false } }, x: { grid: { display: false }, border: { display: false }, ticks: { maxRotation: 0, autoSkipPadding: 14 } } },
+  },
 });
 
+/* ---------- Atualização ---------- */
+let ultimo = null;
 function atualizar() {
   salvar();
   const cargos = validos();
-  $('#vazio').hidden = !!cargos.length; $('#cheio').hidden = !cargos.length;
-  if (!cargos.length) return;
-
   const enc = encargos();
+
+  const totalPessoas = cargos.reduce((t, c) => t + Number(c.pessoas), 0);
+  const folhaHoje = simular(cargos, 44, enc).folha;
+  $('#teamsum').innerHTML = cargos.length
+    ? `<span><b>${plural(totalPessoas, 'funcionário', 'funcionários')}</b> em ${plural(cargos.length, 'cargo', 'cargos')}</span><span>Folha hoje: <b>${brl(folhaHoje)}</b> por mês, com encargos</span>`
+    : '';
+
+  $('#vazio').hidden = !!cargos.length; $('#cheio').hidden = !cargos.length;
+  ultimo = null;
+  if (!cargos.length) return atualizarDock();
+
   const fase = FASES.find((f) => f.id === state.fase) || FASES[2];
   const r = simular(cargos, fase.limite, enc);
+  ultimo = r;
   const porFase = FASES.map((f) => simular(cargos, f.limite, enc).novaFolha);
-  document.querySelectorAll('.tab').forEach((t) => t.setAttribute('aria-selected', t.dataset.f === fase.id));
+  document.querySelectorAll('.seg button').forEach((t) => t.setAttribute('aria-selected', t.dataset.f === fase.id));
+  $('#seg-help').textContent = `${fase.nome}: limite de ${fase.limite}h por semana, ${QUANDO[fase.id]}.`;
 
-  const semImpacto = r.extra === 0;
-  $('#k-main').classList.toggle('ok', semImpacto);
-  $('#k-mes').textContent = semImpacto ? 'Sem impacto' : '+' + brl(r.extra);
-  $('#k-mes-s').textContent = semImpacto ? 'Sua equipe já cabe no novo limite.' : `${pct(r.percentual)} a mais. De ${brl(r.folha)} para ${brl(r.novaFolha)} por mês.`;
+  // Destaque principal
+  const sem = r.extra === 0;
+  const afetados = r.linhas.filter((l) => l.horasFaltando > 0);
+  const contratar = afetados.filter((l) => l.estrategia === 'contratar');
+  const extra = afetados.filter((l) => l.estrategia === 'horaExtra');
+  const nomes = (ls) => ls.map((l) => esc(l.cargo || 'sem nome')).join(', ');
+  $('#hero-res').classList.toggle('ok', sem);
+  $('#h-l').textContent = sem ? `Na ${fase.nome.toLowerCase()}` : `Na ${fase.nome.toLowerCase()}, sua folha sobe`;
+  $('#h-v').innerHTML = sem ? 'Nada muda' : `+${brl(r.extra)}<small> /mês</small>`;
+  $('#h-say').innerHTML = sem
+    ? 'Sua equipe já trabalha dentro do novo limite de horas. Não há custo extra nesta fase.'
+    : `Um aumento de <b>${pct(r.percentual)}</b>: de ${brl(r.folha)} para <b>${brl(r.novaFolha)}</b> por mês. ` +
+      [contratar.length && `Para ${nomes(contratar)}, o mais barato é <b>contratar</b>.`, extra.length && `Para ${nomes(extra)}, sai mais em conta pagar <b>hora extra</b>.`].filter(Boolean).join(' ');
+  const max = Math.max(...porFase);
+  const coresFase = ['#8e8e93', '#f29900', '#ff6b5e'];
+  $('#h-bars').innerHTML = FASES.map((f, i) => `<div class="row"><span>${f.limite}h</span><div class="tr"><div class="fl" style="width:${(porFase[i] / max) * 100}%;background:${coresFase[i]}"></div></div><span>${brl(porFase[i])}</span></div>`).join('') +
+    '<p class="small" style="color:#a1a1a6;margin-top:4px">Folha mensal com encargos em cada etapa.</p>';
+
   $('#k-ano').textContent = brl(r.extra * 13);
   $('#k-contr').textContent = r.contratar;
-  $('#k-contr-s').textContent = r.contratar === 1 ? 'pessoa nova' : 'pessoas novas';
+  $('#k-contr-s').textContent = r.contratar ? `Se seguir as sugestões abaixo. Cada pessoa nova trabalha ${fase.limite}h.` : 'Nas sugestões abaixo, hora extra sai mais barato que contratar.';
   const maior = Math.max(0, ...r.linhas.map((l) => l.aumentoHora));
-  $('#k-hora').textContent = '+' + pct(maior);
-  $('#k-hora-s').textContent = `${r.afetados} de ${r.pessoas} funcionários afetados`;
+  $('#k-hora').textContent = maior ? '+' + pct(maior) : '0%';
+  $('#k-hora-s').textContent = `O salário fica igual e as horas diminuem. ${afetados.length ? `Afeta ${plural(r.afetados, 'funcionário', 'funcionários')} de ${totalPessoas}.` : ''}`;
 
-  gFases.data.datasets[0].data = porFase; gFases.update();
-  gTempo.data.datasets[0].data = linhaDoTempo(cargos, enc); gTempo.update();
+  gCargos.data.labels = r.linhas.map((l) => l.cargo || 'Sem nome');
+  gCargos.data.datasets[0].data = r.linhas.map((l) => Math.round(l.custoExtra));
+  gCargos.update();
+  gTempo.data.datasets[0].data = linhaDoTempo(cargos, enc).map(Math.round);
+  gTempo.update();
 
   $('#t-cargos').innerHTML = r.linhas.map((l) => {
-    const rec = l.estrategia === 'contratar' ? `<span class="pill c">Contratar ${l.contratar}</span>`
-      : l.estrategia === 'horaExtra' ? '<span class="pill h">Hora extra</span>' : '<span class="pill n">Nada muda</span>';
-    return `<tr><td data-l="Cargo"><b>${esc(l.cargo || 'Sem nome')}</b><br><span class="hint">${l.pessoas} × ${l.horas}h</span></td>
-      <td class="num" data-l="Faltam/semana">${l.horasFaltando ? l.horasFaltando.toLocaleString('pt-BR') + 'h' : '—'}</td>
-      <td class="num" data-l="Contratar">${l.horasFaltando ? brl(l.custoContratar) + '/mês' : '—'}</td>
-      <td class="num" data-l="Hora extra">${l.horasFaltando ? brl(l.custoHE) + '/mês' : '—'}</td>
-      <td data-l="Recomendação">${rec}</td></tr>`;
+    const sug = l.estrategia === 'contratar' ? `<span class="tag c">Contratar ${l.contratar}</span>`
+      : l.estrategia === 'horaExtra' ? '<span class="tag h">Hora extra</span>' : '<span class="tag n">Nada muda</span>';
+    const tem = l.horasFaltando > 0;
+    return `<tr><td class="who"><b>${esc(l.cargo || 'Sem nome')}</b><small>${plural(l.pessoas, 'pessoa', 'pessoas')} · ${l.horas}h por semana</small></td>
+      <td class="num" data-l="Horas descobertas">${tem ? nf(l.horasFaltando) + 'h por semana' : '—'}</td>
+      <td class="num${l.estrategia === 'contratar' ? ' best' : ''}" data-l="Se contratar">${tem ? brl(l.custoContratar) + '/mês' : '—'}</td>
+      <td class="num${l.estrategia === 'horaExtra' ? ' best' : ''}" data-l="Se pagar hora extra">${tem ? brl(l.custoHE) + '/mês' : '—'}</td>
+      <td data-l="Sugestão">${sug}</td></tr>`;
   }).join('');
 
-  // Escala
+  renderEscala(cargos, r, fase);
+  renderComo(r, fase, enc);
+  atualizarDock();
+}
+
+function renderEscala(cargos, r, fase) {
   if (state.escala >= cargos.length) state.escala = 0;
   $('#e-cargo').innerHTML = cargos.map((c, i) => `<option value="${i}" ${i === state.escala ? 'selected' : ''}>${esc(c.cargo || 'Cargo ' + (i + 1))}</option>`).join('');
   const l = r.linhas[state.escala];
@@ -194,19 +324,43 @@ function atualizar() {
   const total = l.pessoas + novos;
   const e = gerarEscala(total, state.dias, Math.min(l.horas, fase.limite));
   const mostrar = Math.min(total, 15);
-  const horasTxt = e.horasDia.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + 'h';
+  const h = nf(e.horasDia) + 'h';
   $('#e-sub').textContent = e.diasTrabalho
-    ? `Escala ${e.diasTrabalho}x${7 - e.diasTrabalho} com ${horasTxt} por dia e folgas em rodízio. ${total} pessoas no total.`
-    : 'Marque pelo menos um dia aberto no passo 2.';
+    ? `Cada pessoa trabalha ${e.diasTrabalho} dias de ${h} e folga ${7 - e.diasTrabalho}. As folgas giram para que nunca falte gente.${novos ? ` Inclui ${plural(novos, 'pessoa nova', 'pessoas novas')}.` : ''}`
+    : 'Marque pelo menos um dia de funcionamento no passo 2 para ver a escala.';
   $('#e-grade').innerHTML = `<tr><th></th>${DIAS.map((d) => `<th>${d}</th>`).join('')}</tr>` +
     e.grade.slice(0, mostrar).map((linha, p) => `<tr><td class="name">${p >= l.pessoas ? 'Nova ' + (p - l.pessoas + 1) : 'Pessoa ' + (p + 1)}</td>${linha.map((t, d) =>
-      !state.dias[d] ? '<td class="x">—</td>' : t ? `<td class="t${p >= l.pessoas ? ' nova' : ''}">${horasTxt}</td>` : '<td class="f">Folga</td>').join('')}</tr>`).join('') +
-    `<tr class="cov"><td class="name">Na loja</td>${e.cobertura.map((n, d) => `<td>${state.dias[d] ? n : ''}</td>`).join('')}</tr>`;
+      !state.dias[d] ? '<td class="x">—</td>' : t ? `<td class="t${p >= l.pessoas ? ' nova' : ''}">${h}</td>` : '<td class="f">Folga</td>').join('')}</tr>`).join('') +
+    `<tr class="cov"><td class="name">Trabalhando</td>${e.cobertura.map((n, d) => `<td>${state.dias[d] ? n : ''}</td>`).join('')}</tr>`;
   $('#e-nota').innerHTML = [
-    total > mostrar && `<div class="note">Mostrando ${mostrar} de ${total} pessoas. O rodízio continua igual para as demais.</div>`,
-    e.acimaDe8 && `<div class="note">Com tão poucos dias abertos, cada dia passaria de 8 horas, o máximo da nova regra. Reduza as horas por dia ou abra mais dias.</div>`,
+    total > mostrar && `<div class="note">Mostrando ${mostrar} de ${total} pessoas. O rodízio segue igual para as demais.</div>`,
+    e.acimaDe8 && '<div class="note">Com poucos dias abertos, cada dia passaria de 8 horas, o máximo da nova regra. Abra mais dias ou reduza as horas.</div>',
   ].filter(Boolean).join('');
 }
 
-renderCargos();
-atualizar();
+function renderComo(r, fase, enc) {
+  const l = r.linhas.find((x) => x.horasFaltando > 0);
+  if (!l) { $('#how').innerHTML = `<li>Ninguém na sua equipe passa de ${fase.limite}h por semana, então não há horas descobertas nem custo extra.</li>`; return; }
+  const valorHora = l.salario / (fase.limite * 5);
+  $('#how').innerHTML = `
+    <li>Pegamos um cargo como exemplo: <b>${esc(l.cargo || 'sem nome')}</b>, ${plural(l.pessoas, 'pessoa', 'pessoas')} com ${l.horas}h por semana.</li>
+    <li>Com o novo limite de ${fase.limite}h, cada pessoa deixa de trabalhar ${nf(l.horas - fase.limite)}h. No total, ficam <b>${nf(l.horasFaltando)}h por semana descobertas</b>.</li>
+    <li>O salário não muda, então a hora passa a valer ${brl(l.salario)} ÷ ${fase.limite * 5}h = <b>${valorHora.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</b> (era ${(l.salario / (l.horas * 5)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}).</li>
+    <li><b>Hora extra:</b> ${nf(l.horasFaltando)}h × 4,33 semanas × a hora com 50% a mais, mais ${pct(enc)} de encargos = <b>${brl(l.custoHE)} por mês</b>.</li>
+    <li><b>Contratar:</b> ${plural(l.contratar, 'pessoa nova', 'pessoas novas')} com o mesmo salário, mais encargos = <b>${brl(l.custoContratar)} por mês</b>.</li>
+    <li>Escolhemos a opção mais barata e repetimos a conta para cada cargo. A soma dá o aumento da folha.</li>`;
+}
+
+/* ---------- Barra de resumo ---------- */
+addEventListener('scroll', () => atualizarDock(), { passive: true });
+function atualizarDock() {
+  // Aparece enquanto a pessoa preenche (simulador na tela) e o resultado ainda está abaixo.
+  const sim = $('#simulador').getBoundingClientRect(), res = $('#resultado').getBoundingClientRect();
+  const on = !!ultimo && sim.top < innerHeight * 0.5 && res.top > innerHeight * 0.75;
+  $('#dock').classList.toggle('on', on);
+  $('#dock').setAttribute('aria-hidden', !on);
+  if (ultimo) $('#dock-v').textContent = ultimo.extra ? `+${brl(ultimo.extra)}/mês` : 'nenhum';
+}
+
+function renderTudo() { renderCargos(); renderPasso2(); atualizar(); }
+renderTudo();

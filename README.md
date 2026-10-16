@@ -8,7 +8,7 @@
 
 Um simulador gratuito para pequenos empreendedores entenderem, em poucos minutos, o impacto da redução da jornada de 44 para 40 horas na folha de pagamento.
 
-[**Abrir o simulador**](https://jornada.danyalgil.com) · [Como funciona a conta](#como-a-conta-é-feita) · [Rodar no seu computador](#rodar-no-seu-computador)
+[**Abrir o simulador**](https://jornada.orgulhodeserbrasileiro.com) · [Como funciona a conta](#como-a-conta-é-feita) · [Rodar no seu computador](#rodar-no-seu-computador)
 
 </div>
 
@@ -41,6 +41,7 @@ O Nova Jornada responde três perguntas:
 1. Digite seus cargos (quantas pessoas, salário e horas por semana) ou **envie uma planilha do Excel**. Dá para baixar um modelo pronto no próprio site.
 2. Marque os dias em que o negócio abre e o regime de impostos.
 3. Veja o resultado, troque entre a Fase 1 (42h) e a Fase 2 (40h) e, se quiser, imprima ou salve em PDF para levar ao contador.
+4. Quer refazer? O botão **Começar de novo** apaga tudo, e dá para desfazer na hora.
 
 Tudo roda no navegador. **Nenhum dado é enviado para servidor nenhum.**
 
@@ -92,7 +93,7 @@ Achou um erro na conta ou tem uma regra do seu setor que deveria entrar? Abra um
 
 ## Autor
 
-Desenvolvido por **Ricardo Danyalgil Júnior**.
+Criado por **[Ricardo Danyalgil Júnior](https://www.linkedin.com/in/ricdanyalgil)**, da **[The Danyalgil Company](https://www.linkedin.com/company/the-danyalgil-company)**.
 
 Licença MIT. Use, copie e adapte à vontade.
 
